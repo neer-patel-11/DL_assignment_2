@@ -1,7 +1,4 @@
-"""Training entrypoint
-"""
-"""Training entrypoint
-"""
+
 from data.pets_dataset import get_data_loader
 from models.classification import VGG11Classifier
 
@@ -204,5 +201,183 @@ def train_localizer(
 
     print(f"\n🏁 Training complete. Best IoU: {best_iou:.4f}")
 
+
+
+from models.segmentation import VGG11UNet
+from data.segmentation_dataset import get_segmentation_data_loader
+
+
+def dice_coefficient(pred, target, num_classes=3, eps=1e-7):
+    """
+    Calculate Dice coefficient for evaluation.
+    
+    Args:
+        pred: Predicted segmentation [B, H, W]
+        target: Ground truth segmentation [B, H, W]
+        num_classes: Number of classes
+        eps: Small epsilon for numerical stability
+    
+    Returns:
+        Mean Dice coefficient across all classes
+    """
+    dice_scores = []
+    
+    for c in range(num_classes):
+        pred_c = (pred == c).float()
+        target_c = (target == c).float()
+        
+        intersection = (pred_c * target_c).sum()
+        union = pred_c.sum() + target_c.sum()
+        
+        dice = (2.0 * intersection + eps) / (union + eps)
+        dice_scores.append(dice.item())
+    
+    return sum(dice_scores) / len(dice_scores)
+
+
+def train_vgg11_unet(
+    root_dir,
+    batch_size=16,
+    lr=0.001,
+    epochs=50,
+    image_size=224,
+    device="cuda" if torch.cuda.is_available() else "cpu"
+):
+    
+    
+    # Create checkpoint directory
+    os.makedirs("checkpoints", exist_ok=True)
+    
+    # Load data
+    print("Loading data...")
+    train_loader, test_loader = get_segmentation_data_loader(
+        root_dir=root_dir,
+        batch_size=batch_size,
+        image_size=image_size,
+        num_workers=4
+    )
+    
+    # Initialize model
+    print("Initializing model...")
+    model = VGG11UNet(num_classes=3, in_channels=3).to(device)
+    
+    # Optimizer
+    optimizer = optim.Adam(model.parameters(), lr=lr)
+    
+    # Loss function: Cross-Entropy Loss
+    # We use ignore_index for border class if needed, or train on all 3 classes
+    criterion = nn.CrossEntropyLoss()
+    
+    # Learning rate scheduler
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode='min', factor=0.5, patience=5, verbose=True
+    )
+    
+    best_val_loss = float("inf")
+    best_dice = 0.0
+    
+    print(f"Training on {device}...")
+    print(f"Total training samples: {len(train_loader.dataset)}")
+    print(f"Total test samples: {len(test_loader.dataset)}")
+    print("-" * 60)
+    
+    for epoch in range(epochs):
+        # ========== Training Phase ==========
+        model.train()
+        train_loss = 0.0
+        train_dice = 0.0
+        
+        for batch_idx, (images, masks) in enumerate(train_loader):
+            images, masks = images.to(device), masks.to(device)
+            
+            # Forward pass
+            outputs = model(images)
+            loss = criterion(outputs, masks)
+            
+            # Backward pass
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            
+            # Metrics
+            train_loss += loss.item()
+            
+            # Calculate Dice coefficient
+            preds = torch.argmax(outputs, dim=1)
+            dice = dice_coefficient(preds, masks, num_classes=3)
+            train_dice += dice
+            
+            # Print progress
+            if (batch_idx + 1) % 10 == 0:
+                print(f"Epoch [{epoch+1}/{epochs}] Batch [{batch_idx+1}/{len(train_loader)}] "
+                      f"Loss: {loss.item():.4f} Dice: {dice:.4f}")
+        
+        train_loss /= len(train_loader)
+        train_dice /= len(train_loader)
+        
+        # ========== Validation Phase ==========
+        model.eval()
+        val_loss = 0.0
+        val_dice = 0.0
+        
+        with torch.no_grad():
+            for images, masks in test_loader:
+                images, masks = images.to(device), masks.to(device)
+                
+                # Forward pass
+                outputs = model(images)
+                loss = criterion(outputs, masks)
+                
+                # Metrics
+                val_loss += loss.item()
+                
+                # Calculate Dice coefficient
+                preds = torch.argmax(outputs, dim=1)
+                dice = dice_coefficient(preds, masks, num_classes=3)
+                val_dice += dice
+        
+        val_loss /= len(test_loader)
+        val_dice /= len(test_loader)
+        
+        # Update learning rate
+        scheduler.step(val_loss)
+        
+        # Print epoch summary
+        print("=" * 60)
+        print(f"Epoch [{epoch+1}/{epochs}] Summary:")
+        print(f"Train Loss: {train_loss:.4f} | Train Dice: {train_dice:.4f}")
+        print(f"Val Loss: {val_loss:.4f} | Val Dice: {val_dice:.4f}")
+        print("=" * 60)
+        
+        # Save best model based on Dice coefficient
+        if val_dice > best_dice:
+            best_dice = val_dice
+            best_val_loss = val_loss
+            
+            checkpoint = {
+                "state_dict": model.state_dict(),
+                "optimizer": optimizer.state_dict(),
+                "epoch": epoch + 1,
+                "best_dice": best_dice,
+                "best_val_loss": best_val_loss,
+            }
+            
+            torch.save(checkpoint, "checkpoints/unet_segmentation_best.pth")
+            print(f"✓ Saved best model (Dice: {best_dice:.4f})")
+        
+        print()
+    
+    print("Training complete!")
+    print(f"Best Validation Dice: {best_dice:.4f}")
+    print(f"Best Validation Loss: {best_val_loss:.4f}")
+
+
 # if __name__ == "__main__":
-#     train_vgg11(batch_size=64,epochs=1)
+#     # Example usage
+#     train_vgg11_unet(
+#         root_dir="path/to/oxford-iiit-pet",  # Update this path
+#         batch_size=16,
+#         lr=0.001,
+#         epochs=50,
+#         image_size=224
+#     )
