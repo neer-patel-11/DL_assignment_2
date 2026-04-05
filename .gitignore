@@ -2,3 +2,6 @@
 data/dataset/
 */__pycache__/
 data.zip
+checkpoints/classifier.pth
+checkpoints/localizer.pth
+checkpoints/unet.pth
