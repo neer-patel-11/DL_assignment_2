@@ -25,23 +25,23 @@ class MultiTaskPerceptionModel(nn.Module):
 
         super().__init__()
 
-        # ── Shared backbone ──────────────────────────────────────────────
         self.encoder = VGG11Encoder(in_channels=in_channels)
 
-        # ── Classification head ──────────────────────────────────────────
+        # Note: VGG11Encoder outputs after block5+pool5, which is 512x7x7
+        # VGG11Classifier does NOT have AdaptiveAvgPool, so we shouldn't add it either
         self.cls_head = nn.Sequential(
-            nn.AdaptiveAvgPool2d((7, 7)),   # 0
-            nn.Flatten(),                   # 1
-            nn.Linear(512 * 7 * 7, 4096),  # 2
-            nn.ReLU(inplace=True),          # 3
-            CustomDropout(dropout_p),       # 4
-            nn.Linear(4096, 4096),          # 5
-            nn.ReLU(inplace=True),          # 6
-            CustomDropout(dropout_p),       # 7
-            nn.Linear(4096, num_breeds),    # 8
+            nn.Flatten(),                   # 0
+            nn.Linear(512 * 7 * 7, 4096),  # 1
+            nn.ReLU(inplace=True),          # 2
+            CustomDropout(dropout_p),       # 3
+            nn.Linear(4096, 4096),          # 4
+            nn.ReLU(inplace=True),          # 5
+            CustomDropout(dropout_p),       # 6
+            nn.Linear(4096, num_breeds),    # 7
         )
 
         # ── Localisation head ────────────────────────────────────────────
+        # VGG11Localizer DOES have AdaptiveAvgPool2d
         self.loc_head = nn.Sequential(
             nn.AdaptiveAvgPool2d((7, 7)),   # 0
             nn.Flatten(),                   # 1
@@ -81,7 +81,6 @@ class MultiTaskPerceptionModel(nn.Module):
             self._load_unet(unet_path)
         if localizer_path:
             self._load_localizer(localizer_path)
-
     # ── helpers ──────────────────────────────────────────────────────────
 
     @staticmethod
@@ -109,7 +108,7 @@ class MultiTaskPerceptionModel(nn.Module):
         ckpt = torch.load(path, map_location="cpu")
         sd   = ckpt.get("state_dict", ckpt)
 
-        # Map features to encoder blocks
+        # Map features to encoder blocks (same as before)
         idx_to_enc = {
             # Block 1: Conv + BN
             "features.0.weight": "block1.0.weight",
@@ -190,21 +189,21 @@ class MultiTaskPerceptionModel(nn.Module):
             if cls_k in sd:
                 new_sd[f"encoder.{enc_k}"] = sd[cls_k]
 
-        # Load encoder weights (strict=False to ignore other model parts)
         result = self.load_state_dict(new_sd, strict=False)
-        
-        # Count actual encoder weights loaded
         encoder_loaded = sum(1 for k in new_sd.keys() if k.startswith("encoder."))
         print(f"✓ [classifier] Encoder loaded: {encoder_loaded} weights from encoder")
 
         # Load classification head
+        # VGG11Classifier.classifier: Flatten(0) Linear(1) ReLU(2) Dropout(3) Linear(4) ReLU(5) Dropout(6) Linear(7)
+        # MultiTask cls_head: Flatten(0) Linear(1) ReLU(2) Dropout(3) Linear(4) ReLU(5) Dropout(6) Linear(7)
+        # NOW THEY MATCH!
         cls_map = {
-            "classifier.1.weight": "cls_head.2.weight",
-            "classifier.1.bias":   "cls_head.2.bias",
-            "classifier.4.weight": "cls_head.5.weight",
-            "classifier.4.bias":   "cls_head.5.bias",
-            "classifier.7.weight": "cls_head.8.weight",
-            "classifier.7.bias":   "cls_head.8.bias",
+            "classifier.1.weight": "cls_head.1.weight",
+            "classifier.1.bias":   "cls_head.1.bias",
+            "classifier.4.weight": "cls_head.4.weight",
+            "classifier.4.bias":   "cls_head.4.bias",
+            "classifier.7.weight": "cls_head.7.weight",
+            "classifier.7.bias":   "cls_head.7.bias",
         }
 
         cls_sd = {head_k: sd[cls_k]
@@ -213,8 +212,6 @@ class MultiTaskPerceptionModel(nn.Module):
 
         result = self.load_state_dict(cls_sd, strict=False)
         print(f"✓ [classifier] Classification head loaded: {len(cls_sd)} weights")
-
-
     def _load_localizer(self, path: str):
         """
         Load localizer regression head from VGG11Localizer checkpoint.
