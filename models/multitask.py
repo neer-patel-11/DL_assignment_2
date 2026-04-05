@@ -96,7 +96,16 @@ class MultiTaskPerceptionModel(nn.Module):
         )
 
     def _load_classifier(self, path: str):
-    
+        """
+        Load encoder weights from VGG11Classifier checkpoint.
+
+        VGG11Classifier.features WITH BatchNorm:
+        Block 1: Conv(0) BN(1) ReLU(2) Pool(3)
+        Block 2: Conv(4) BN(5) ReLU(6) Pool(7)
+        Block 3: Conv(8) BN(9) ReLU(10) Conv(11) BN(12) ReLU(13) Pool(14)
+        Block 4: Conv(15) BN(16) ReLU(17) Conv(18) BN(19) ReLU(20) Pool(21)
+        Block 5: Conv(22) BN(23) ReLU(24) Conv(25) BN(26) ReLU(27) Pool(28)
+        """
         ckpt = torch.load(path, map_location="cpu")
         sd   = ckpt.get("state_dict", ckpt)
 
@@ -181,9 +190,12 @@ class MultiTaskPerceptionModel(nn.Module):
             if cls_k in sd:
                 new_sd[f"encoder.{enc_k}"] = sd[cls_k]
 
-        missing, unexpected = self.load_state_dict(new_sd, strict=False)
-        print(f"[classifier] encoder loaded | matched: {len(new_sd)} | "
-            f"missing: {len(missing)} | unexpected: {len(unexpected)}")
+        # Load encoder weights (strict=False to ignore other model parts)
+        result = self.load_state_dict(new_sd, strict=False)
+        
+        # Count actual encoder weights loaded
+        encoder_loaded = sum(1 for k in new_sd.keys() if k.startswith("encoder."))
+        print(f"✓ [classifier] Encoder loaded: {encoder_loaded} weights from encoder")
 
         # Load classification head
         cls_map = {
@@ -199,10 +211,10 @@ class MultiTaskPerceptionModel(nn.Module):
                 for cls_k, head_k in cls_map.items()
                 if cls_k in sd}
 
-        missing, unexpected = self.load_state_dict(cls_sd, strict=False)
-        print(f"[classifier] cls_head loaded | matched: {len(cls_sd)} | "
-            f"missing: {len(missing)} | unexpected: {len(unexpected)}")
-        
+        result = self.load_state_dict(cls_sd, strict=False)
+        print(f"✓ [classifier] Classification head loaded: {len(cls_sd)} weights")
+
+
     def _load_localizer(self, path: str):
         """
         Load localizer regression head from VGG11Localizer checkpoint.
@@ -230,12 +242,10 @@ class MultiTaskPerceptionModel(nn.Module):
                 for loc_k, head_k in loc_map.items()
                 if loc_k in sd}
 
-        missing, unexpected = self.load_state_dict(new_sd, strict=False)
-        print(f"[localizer] loc_head loaded | matched: {len(new_sd)} | "
-            f"missing: {len(missing)} | unexpected: {len(unexpected)}")
-    
+        result = self.load_state_dict(new_sd, strict=False)
+        print(f"✓ [localizer] Localization head loaded: {len(new_sd)} weights")
 
-   
+
     def _load_unet(self, path: str):
         """
         Load encoder + decoder weights from VGG11UNet checkpoint.
@@ -248,20 +258,17 @@ class MultiTaskPerceptionModel(nn.Module):
 
         # encoder
         enc_sd = {k[len("encoder."):]: v
-                  for k, v in sd.items() if k.startswith("encoder.")}
-        missing, unexpected = self.encoder.load_state_dict(enc_sd, strict=False)
-        print(f"[unet] encoder loaded | matched: {len(enc_sd)} | "
-              f"missing: {len(missing)} | unexpected: {len(unexpected)}")
+                for k, v in sd.items() if k.startswith("encoder.")}
+        result = self.encoder.load_state_dict(enc_sd, strict=False)
+        print(f"✓ [unet] Encoder loaded: {len(enc_sd)} weights")
 
         # decoder + seg_final
         dec_keys = ("up5","dec5","up4","dec4","up3","dec3",
                     "up2","dec2","up1","dec1","seg_final")
         dec_sd = {k: v for k, v in sd.items()
-                  if any(k.startswith(dk) for dk in dec_keys)}
-        missing, unexpected = self.load_state_dict(dec_sd, strict=False)
-        print(f"[unet] decoder loaded | matched: {len(dec_sd)} | "
-              f"missing: {len(missing)} | unexpected: {len(unexpected)}")
-
+                if any(k.startswith(dk) for dk in dec_keys)}
+        result = self.load_state_dict(dec_sd, strict=False)
+        print(f"✓ [unet] Segmentation decoder loaded: {len(dec_sd)} weights")
 
     def forward(self, x: torch.Tensor):
         """Forward pass for multi-task model.
