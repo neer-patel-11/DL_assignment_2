@@ -1,7 +1,3 @@
-import gdown
-gdown.download(id="1wsj_OO2fE26Hn_czJCZkMSDZl1jFu29r", output='/', quiet=False)
-gdown.download(id="1BpOe9YyojShsXoSTBvdBflrubHEF2wQK", output='/', quiet=False)
-gdown.download(id="1H59EmgH6IACggQ_jaSY0OAGPwz2Ai7WU", output='/', quiet=False)
 
 import torch
 import torch.nn as nn
@@ -11,7 +7,7 @@ from models.vgg11 import VGG11Encoder
 class MultiTaskPerceptionModel(nn.Module):
     """Shared-backbone multi-task model."""
 
-    def __init__(self, num_breeds: int = 37, seg_classes: int = 3, in_channels: int = 3, classifier_path: str = "./classifier.pth", localizer_path: str = "./localizer.pth", unet_path: str = "./unet.pth",dropout_p=0.3):
+    def __init__(self, num_breeds: int = 37, seg_classes: int = 3, in_channels: int = 3, classifier_path: str = "checkpoints/classifier.pth", localizer_path: str = "checkpoints/localizer.pth", unet_path: str = "checkpoints/unet.pth",dropout_p=0.3):
         """
         Initialize the shared backbone/heads using these trained weights.
         Args:
@@ -22,6 +18,11 @@ class MultiTaskPerceptionModel(nn.Module):
             localizer_path: Path to trained localizer weights.
             unet_path: Path to trained unet weights.
         """
+        import gdown
+        gdown.download(id="1wsj_OO2fE26Hn_czJCZkMSDZl1jFu29r", output=classifier_path, quiet=False)
+        gdown.download(id="1BpOe9YyojShsXoSTBvdBflrubHEF2wQK", output=localizer_path, quiet=False)
+        gdown.download(id="1H59EmgH6IACggQ_jaSY0OAGPwz2Ai7WU", output=unet_path, quiet=False)
+
         super().__init__()
 
         # ── Shared backbone ──────────────────────────────────────────────
