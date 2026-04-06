@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 from models.layers import CustomDropout
 from models.vgg11 import VGG11Encoder
-
+from models.classification import VGG11Classifier
 class MultiTaskPerceptionModel(nn.Module):
     """Shared-backbone multi-task model."""
 
@@ -24,6 +24,8 @@ class MultiTaskPerceptionModel(nn.Module):
         gdown.download(id="1H59EmgH6IACggQ_jaSY0OAGPwz2Ai7WU", output=unet_path, quiet=False)
 
         super().__init__()
+
+        self.classifier = VGG11Classifier(num_classes=num_breeds, in_channels=in_channels)
 
         # ── Shared backbone ──────────────────────────────────────────────
         self.encoder = VGG11Encoder(in_channels=in_channels)
@@ -106,8 +108,10 @@ class MultiTaskPerceptionModel(nn.Module):
         Block 4: Conv(15) BN(16) ReLU(17) Conv(18) BN(19) ReLU(20) Pool(21)
         Block 5: Conv(22) BN(23) ReLU(24) Conv(25) BN(26) ReLU(27) Pool(28)
         """
+
         ckpt = torch.load(path, map_location="cpu")
-        sd   = ckpt.get("state_dict", ckpt)
+        sd = ckpt.get("state_dict", ckpt)
+        self.classifier.load_state_dict(sd, strict=True)
 
         # Map features to encoder blocks
         idx_to_enc = {
@@ -312,8 +316,10 @@ class MultiTaskPerceptionModel(nn.Module):
 
         seg_out = self.seg_final(s)
 
+
+
         return {
-            "classification": cls_out,
+            "classification": self.classifier(x) ,
             "localization":   loc_out,
             "segmentation":   seg_out,
         }
