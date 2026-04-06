@@ -155,7 +155,12 @@ class MultiTaskPerceptionModel(nn.Module):
         # Single load_state_dict call for both encoder + cls_head
         result = self.load_state_dict(new_sd, strict=False)
         print(f"✓ [classifier] Loaded {len(new_sd)} weights | missing: {len(result.missing_keys)} | unexpected: {len(result.unexpected_keys)}")
-        
+        all_keys = set(self.state_dict().keys())
+        loaded_keys = set()  # accumulate in each _load method
+
+        # then at the end of __init__:
+        print(f"Total model params: {len(all_keys)}")
+        print(f"Unloaded keys: {all_keys - loaded_keys}")
     def _load_localizer(self, path: str):
         """
         Load localizer regression head from VGG11Localizer checkpoint.
