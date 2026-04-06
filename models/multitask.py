@@ -316,10 +316,10 @@ class MultiTaskPerceptionModel(nn.Module):
 
         seg_out = self.seg_final(s)
 
-
+    
 
         return {
-            "classification": self.classifier(x) ,
+            "classification": cls_out,
             "localization":   loc_out,
             "segmentation":   seg_out,
         }
