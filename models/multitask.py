@@ -27,7 +27,7 @@ class MultiTaskPerceptionModel(nn.Module):
 
         # Download checkpoints 
         import gdown
-        gdown.download(id="1rKqCIeyfgEAKiRdCbUmjJAKbWAXgVt5O", output=classifier_path, quiet=False)
+        gdown.download(id="1zvfoMy1ds9v1Df9ZeSanBHK8XVu045WD", output=classifier_path, quiet=False)
         gdown.download(id="1BpOe9YyojShsXoSTBvdBflrubHEF2wQK", output=localizer_path, quiet=False)
         gdown.download(id="1H59EmgH6IACggQ_jaSY0OAGPwz2Ai7WU", output=unet_path, quiet=False)
 
