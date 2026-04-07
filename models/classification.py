@@ -1,15 +1,14 @@
-"""Classification components
-"""
+"""Classification components"""
 
 import torch
 import torch.nn as nn
-from models.layers import CustomDropout
-
+from models.vgg11 import VGG11Encoder  
+from layers import CustomDropout
 
 class VGG11Classifier(nn.Module):
     """Full classifier = VGG11Encoder + ClassificationHead."""
 
-    def __init__(self, num_classes: int = 37, in_channels: int = 3, dropout_p: float = 0.5):
+    def __init__(self, num_classes: int = 37, in_channels: int = 3, dropout_p: float = 0.4):
         """
         Initialize the VGG11Classifier model.
         Args:
@@ -19,61 +18,20 @@ class VGG11Classifier(nn.Module):
         """
         super().__init__()
 
-        self.features = nn.Sequential(
-            # Block 1
-            nn.Conv2d(in_channels, 64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
+        self.features = VGG11Encoder(in_channels=in_channels)
 
-            # Block 2
-            nn.Conv2d(64, 128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
-
-            # Block 3
-            nn.Conv2d(128, 256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
-
-            # Block 4
-            nn.Conv2d(256, 512, kernel_size=3, padding=1),
-            nn.BatchNorm2d(512),
-            nn.ReLU(),
-            nn.Conv2d(512, 512, kernel_size=3, padding=1),
-            nn.BatchNorm2d(512),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
-
-            # Block 5
-            nn.Conv2d(512, 512, kernel_size=3, padding=1),
-            nn.BatchNorm2d(512),
-            nn.ReLU(),
-            nn.Conv2d(512, 512, kernel_size=3, padding=1),
-            nn.BatchNorm2d(512),
-            nn.ReLU(),
-            nn.MaxPool2d(2)
-        )
-
-        # 🔹 Classifier
         self.classifier = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(512 * 7 * 7, 4096),   
+            nn.Linear(512 * 7 * 7, 4096),
             nn.ReLU(),
-            CustomDropout(0.5),
+            CustomDropout(dropout_p),
 
             nn.Linear(4096, 4096),
             nn.ReLU(),
-            CustomDropout(0.5),
+            CustomDropout(dropout_p),
 
             nn.Linear(4096, num_classes)
         )
-
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass for classification model.
@@ -82,7 +40,6 @@ class VGG11Classifier(nn.Module):
         Returns:
             Classification logits [B, num_classes].
         """
-        x = self.features(x)
+        x = self.features(x, return_features=False)  # bottleneck: [B, 512, 7, 7] for 224x224 input
         x = self.classifier(x)
-
         return x

@@ -2,44 +2,71 @@
 from data.pets_dataset import get_data_loader
 from models.classification import VGG11Classifier
 
+
 import torch
-import torch.optim as optim 
+import torch.optim as optim
 import torch.nn as nn
+from sklearn.metrics import f1_score, accuracy_score
 import os
 
-def train_vgg11(batch_size=32, lr=0.002, epochs=10, device="cuda" if torch.cuda.is_available() else "cpu"):
 
-    train_loader, test_loader = get_data_loader(batch_size=batch_size)
+def train_vgg11(batch_size=32, lr=1e-4, epochs=40, device="cuda" if torch.cuda.is_available() else "cpu"):
+
+    train_loader, test_loader = get_data_loader(batch_size=batch_size,test_size=0.1)
 
     model = VGG11Classifier().to(device)
-    
+
     optimizer = optim.Adam(model.parameters(), lr=lr)
+    # optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay=5e-4)
     criterion = nn.CrossEntropyLoss()
 
-    best_val_loss = float("inf")
+    best_val_f1 = 0
+
+    os.makedirs("/content/checkpoints", exist_ok=True)
 
     for epoch in range(epochs):
 
+        # ================= TRAIN =================
         model.train()
         train_loss = 0.0
+
+        all_train_preds = []
+        all_train_labels = []
 
         for x, y in train_loader:
             x, y = x.to(device), y.to(device)
 
+            # outputs = model(x)
+            # loss = criterion(outputs, y)
+
+            # optimizer.zero_grad()
+            # loss.backward()
+            # optimizer.step()
+
+            optimizer.zero_grad()   # <-- BEFORE forward pass
             outputs = model(x)
             loss = criterion(outputs, y)
-
-            optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-
             train_loss += loss.item()
+
+            preds = torch.argmax(outputs, dim=1)
+
+            all_train_preds.extend(preds.cpu().numpy())
+            all_train_labels.extend(y.cpu().numpy())
 
         train_loss /= len(train_loader)
 
+        train_f1 = f1_score(all_train_labels, all_train_preds, average="macro")
+        train_acc = accuracy_score(all_train_labels, all_train_preds)
 
+
+        # ================= VALIDATION =================
         model.eval()
         val_loss = 0.0
+
+        all_val_preds = []
+        all_val_labels = []
 
         with torch.no_grad():
             for x, y in test_loader:
@@ -50,22 +77,38 @@ def train_vgg11(batch_size=32, lr=0.002, epochs=10, device="cuda" if torch.cuda.
 
                 val_loss += loss.item()
 
+                preds = torch.argmax(outputs, dim=1)
+
+                all_val_preds.extend(preds.cpu().numpy())
+                all_val_labels.extend(y.cpu().numpy())
+
         val_loss /= len(test_loader)
 
+        val_f1 = f1_score(all_val_labels, all_val_preds, average="macro")
+        val_acc = accuracy_score(all_val_labels, all_val_preds)
 
-        print(f"Epoch [{epoch+1}/{epochs}] | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
+
+        # ================= LOG =================
+        print(
+            f"Epoch [{epoch+1}/{epochs}] | "
+            f"Train Loss: {train_loss:.4f} | Train F1: {train_f1:.4f} | Train Acc: {train_acc:.4f} || "
+            f"Val Loss: {val_loss:.4f} | Val F1: {val_f1:.4f} | Val Acc: {val_acc:.4f}"
+        )
 
 
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
+        # ================= SAVE BEST =================
+        if val_f1 > best_val_f1:
+            best_val_f1 = val_f1
 
             checkpoint = {
                 "state_dict": model.state_dict(),
                 "epoch": epoch + 1,
-                "best_metric": best_val_loss,
+                "best_val_f1": best_val_f1,
+                "val_f1": val_f1,
+                "val_acc": val_acc,
             }
 
-            torch.save(checkpoint, "checkpoints/classifier.pth")
+            torch.save(checkpoint, "/checkpoints/classifier.pth")
             print(" Saved best model")
 
 

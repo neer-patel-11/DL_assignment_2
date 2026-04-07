@@ -19,14 +19,34 @@ class MultiTaskPerceptionModel(nn.Module):
             unet_path: Path to trained unet weights.
         """
         import gdown
-        gdown.download(id="1wsj_OO2fE26Hn_czJCZkMSDZl1jFu29r", output=classifier_path, quiet=False)
+        gdown.download(id="1rKqCIeyfgEAKiRdCbUmjJAKbWAXgVt5O", output=classifier_path, quiet=False)
         gdown.download(id="1BpOe9YyojShsXoSTBvdBflrubHEF2wQK", output=localizer_path, quiet=False)
         gdown.download(id="1H59EmgH6IACggQ_jaSY0OAGPwz2Ai7WU", output=unet_path, quiet=False)
 
         super().__init__()
 
         # ── Shared backbone ──────────────────────────────────────────────
+        # self.encoder = VGG11Encoder(in_channels=in_channels)
+
+        super().__init__()
+
+        # ── Shared backbone ──────────────────────────────────────────────────
         self.encoder = VGG11Encoder(in_channels=in_channels)
+
+        # ── Task 1: Classification head (updated) ────────────────────────────
+        # Mirrors VGG11Classifier exactly: Flatten → 4096 → 4096 → num_classes
+        self.classification_head = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(512 * 7 * 7, 4096),
+            nn.ReLU(),
+            CustomDropout(dropout_p),
+
+            nn.Linear(4096, 4096),
+            nn.ReLU(),
+            CustomDropout(dropout_p),
+
+            nn.Linear(4096, num_breeds),
+        )
 
         # ── Classification head ──────────────────────────────────────────
         self.cls_head = nn.Sequential(
@@ -198,17 +218,21 @@ class MultiTaskPerceptionModel(nn.Module):
         #   AvgPool(0) Flatten(1) Linear(2) ReLU(3) Dropout(4)
         #   Linear(5)  ReLU(6)   Dropout(7) Linear(8)
         cls_map = {
-            "classifier.1.weight": "cls_head.2.weight",
-            "classifier.1.bias":   "cls_head.2.bias",
-            "classifier.4.weight": "cls_head.5.weight",
-            "classifier.4.bias":   "cls_head.5.bias",
-            "classifier.7.weight": "cls_head.8.weight",
-            "classifier.7.bias":   "cls_head.8.bias",
+            "classifier.1.weight": "classification_head.1.weight",
+            "classifier.1.bias":   "classification_head.1.bias",
+            "classifier.4.weight": "classification_head.4.weight",
+            "classifier.4.bias":   "classification_head.4.bias",
+            "classifier.7.weight": "classification_head.7.weight",
+            "classifier.7.bias":   "classification_head.7.bias",
         }
 
         cls_sd = {head_k: sd[cls_k]
-                  for cls_k, head_k in cls_map.items()
-                  if cls_k in sd}
+                for cls_k, head_k in cls_map.items()
+                if cls_k in sd}
+
+        # missing, unexpected = self.load_state_dict(cls_sd, strict=False)
+        # print(f"[classifier] classification_head loaded | matched: {len(cls_sd)} | "
+        #     f"missing: {len(missing)} | unexpected: {len(unexpected)}")
 
         missing, unexpected = self.load_state_dict(cls_sd, strict=False)
         print(f"[classifier] cls_head loaded | matched: {len(cls_sd)} | "
@@ -286,7 +310,7 @@ class MultiTaskPerceptionModel(nn.Module):
         bottleneck, skips = self.encoder(x, return_features=True)
 
         # classification
-        cls_out = self.cls_head(bottleneck)
+        # cls_out = self.cls_head(bottleneck)
 
         # localization
         loc_out = self.loc_head(bottleneck)
@@ -313,6 +337,8 @@ class MultiTaskPerceptionModel(nn.Module):
         s = self.dec1(s)
 
         seg_out = self.seg_final(s)
+
+        cls_out = self.classification_head(bottleneck)
 
         return {
             "classification": cls_out,
