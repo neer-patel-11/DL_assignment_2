@@ -3,7 +3,7 @@
 import torch
 import torch.nn as nn
 from models.vgg11 import VGG11Encoder  
-from layers import CustomDropout
+from models.layers import CustomDropout
 
 class VGG11Classifier(nn.Module):
     """Full classifier = VGG11Encoder + ClassificationHead."""
