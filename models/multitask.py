@@ -21,7 +21,7 @@ class MultiTaskPerceptionModel(nn.Module):
         classifier_path: str = "checkpoints/classifier.pth",
         localizer_path: str = "checkpoints/localizer.pth",
         unet_path: str = "checkpoints/unet.pth",
-        dropout_p: float = 0.3,
+        dropout_p: float = 0.0,
     ):
         super().__init__()
 
