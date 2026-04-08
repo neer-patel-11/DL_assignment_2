@@ -1,14 +1,20 @@
+"""Custom IoU loss 
+"""
+
 import torch
 import torch.nn as nn
 
-
 class IoULoss(nn.Module):
-    """
-    Generalized IoU Loss (GIoU)
-    Works better than vanilla IoU
+    """IoU loss for bounding box regression.
     """
 
     def __init__(self, eps: float = 1e-6, reduction: str = "mean"):
+        """
+        Initialize the IoULoss module.
+        Args:
+            eps: Small value to avoid division by zero.
+            reduction: Specifies the reduction to apply to the output: 'mean' | 'sum'.
+        """
         super().__init__()
         self.eps = eps
 
@@ -16,8 +22,11 @@ class IoULoss(nn.Module):
             raise ValueError("reduction must be 'none', 'mean', or 'sum'")
         self.reduction = reduction
 
-    def forward(self, pred_boxes: torch.Tensor, target_boxes: torch.Tensor):
-
+    def forward(self, pred_boxes: torch.Tensor, target_boxes: torch.Tensor) -> torch.Tensor:
+        """Compute IoU loss between predicted and target bounding boxes.
+        Args:
+            pred_boxes: [B, 4] predicted boxes in (x_center, y_center, width, height) format.
+            target_boxes: [B, 4] target boxes in (x_center, y_center, width, height) format."""
         def to_corners(box):
             x, y, w, h = box[:, 0], box[:, 1], box[:, 2], box[:, 3]
             xmin = x - w / 2
@@ -29,7 +38,7 @@ class IoULoss(nn.Module):
         pxmin, pymin, pxmax, pymax = to_corners(pred_boxes)
         txmin, tymin, txmax, tymax = to_corners(target_boxes)
 
-        # ---------- INTERSECTION ----------
+        # Intersection
         ixmin = torch.max(pxmin, txmin)
         iymin = torch.max(pymin, tymin)
         ixmax = torch.min(pxmax, txmax)
@@ -39,25 +48,15 @@ class IoULoss(nn.Module):
         inter_h = (iymax - iymin).clamp(min=0)
         intersection = inter_w * inter_h
 
-        # ---------- AREAS ----------
+        # Areas
         pred_area = (pxmax - pxmin).clamp(min=0) * (pymax - pymin).clamp(min=0)
         target_area = (txmax - txmin).clamp(min=0) * (tymax - tymin).clamp(min=0)
 
         union = pred_area + target_area - intersection + self.eps
+
         iou = intersection / union
 
-        # ---------- ENCLOSING BOX ----------
-        cxmin = torch.min(pxmin, txmin)
-        cymin = torch.min(pymin, tymin)
-        cxmax = torch.max(pxmax, txmax)
-        cymax = torch.max(pymax, tymax)
-
-        c_area = (cxmax - cxmin).clamp(min=0) * (cymax - cymin).clamp(min=0) + self.eps
-
-        # ---------- GIoU ----------
-        giou = iou - (c_area - union) / c_area
-
-        loss = 1 - giou
+        loss = 1 - iou
 
         if self.reduction == "mean":
             return loss.mean()
@@ -65,3 +64,4 @@ class IoULoss(nn.Module):
             return loss.sum()
         else:
             return loss
+    

@@ -43,7 +43,7 @@ class MultiTaskPerceptionModel(nn.Module):
         self.classifier = VGG11Classifier(num_classes=num_breeds)
         self.localizer = VGG11Localizer()
 
-        # self.seg_classes = seg_classes
+        self.seg_classes = seg_classes
 
         # -------- LOAD WEIGHTS --------
         self._load_classifier(classifier_path)
