@@ -3,7 +3,7 @@ import torch.nn as nn
 from models.layers import CustomDropout
 from models.vgg11 import VGG11Encoder
 from models.classification import VGG11Classifier
-
+import os
 
 def _load_state(path, device="cpu"):
     ckpt = torch.load(path, map_location=device)
@@ -27,6 +27,7 @@ class MultiTaskPerceptionModel(nn.Module):
 
         # Download checkpoints  
         import gdown
+        os.makedirs(os.path.dirname(classifier_path) if os.path.dirname(classifier_path) else "checkpoints", exist_ok=True)
         gdown.download(id="1zvfoMy1ds9v1Df9ZeSanBHK8XVu045WD", output=classifier_path, quiet=False)
         gdown.download(id="1BpOe9YyojShsXoSTBvdBflrubHEF2wQK", output=localizer_path, quiet=False)
         gdown.download(id="1H59EmgH6IACggQ_jaSY0OAGPwz2Ai7WU", output=unet_path, quiet=False)
@@ -78,7 +79,7 @@ class MultiTaskPerceptionModel(nn.Module):
         B = x.size(0)
 
         # Encoder → [B, 512, 7, 7]
-        bottleneck = self.encoder(x, return_features=False)
+        bottleneck = self.encoder(x, return_features=True)
 
         # Classification
         cls_out = self.classification_head(bottleneck)
