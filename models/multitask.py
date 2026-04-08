@@ -30,15 +30,14 @@ class MultiTaskPerceptionModel(nn.Module):
     ):
         super().__init__()
 
-        # -------- DOWNLOAD CHECKPOINTS (REQUIRED) --------
+        # -------- DOWNLOAD CHECKPOINTS (REQUIRED) --------         import gdown
         import gdown
-
         os.makedirs(
             os.path.dirname(classifier_path) if os.path.dirname(classifier_path) else "checkpoints",
             exist_ok=True
         )
 
-        gdown.download(id="1zvfoMy1ds9v1Df9ZeSanBHK8XVu045WD", output=classifier_path, quiet=False)
+        gdown.download(id="19Grc7A4q9J6Dq9dJM9w9VOscjQu_V-o9", output=classifier_path, quiet=False)
         gdown.download(id="1BpOe9YyojShsXoSTBvdBflrubHEF2wQK", output=localizer_path, quiet=False)
         gdown.download(id="1H59EmgH6IACggQ_jaSY0OAGPwz2Ai7WU", output=unet_path, quiet=False)
 

@@ -24,7 +24,7 @@ class VGG11Classifier(nn.Module):
             CustomDropout(dropout_p),
 
             nn.Linear(4096, 4096),
-            nn.ReLU(inplace=True),
+            nn.ReLU(inplace=True),  
             CustomDropout(dropout_p),
 
             nn.Linear(4096, num_classes)
