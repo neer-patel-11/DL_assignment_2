@@ -1,122 +1,192 @@
-"""Dataset skeleton for Oxford-IIIT Pet.
-"""
 import os
-from torch.utils.data import Dataset
-from PIL import Image
+import xml.etree.ElementTree as ET
+
 import numpy as np
-from sklearn.model_selection import train_test_split
-from torch.utils.data import DataLoader
+from PIL import Image
 import torch
+from torch.utils.data import Dataset, DataLoader
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
+from sklearn.model_selection import train_test_split
+
+
+IMAGE_SIZE = 224
+
+
+def get_transforms(split):
+    if split == "train":
+        return A.Compose(
+            [
+                A.Resize(IMAGE_SIZE, IMAGE_SIZE),
+                A.HorizontalFlip(p=0.5),
+                A.ShiftScaleRotate(0.05, 0.1, 15, p=0.5),
+                A.ColorJitter(0.3, 0.3, 0.3, 0.05, p=0.5),
+                A.CoarseDropout(num_holes_range=(1, 4),
+                                hole_height_range=(16, 32),
+                                hole_width_range=(16, 32), p=0.3),
+                A.Normalize(mean=(0.485, 0.456, 0.406),
+                            std=(0.229, 0.224, 0.225)),
+                ToTensorV2(),
+            ],
+            bbox_params=A.BboxParams(format="albumentations",
+                                     label_fields=["bbox_labels"],
+                                     clip=True,
+                                     min_visibility=0.3),
+        )
+    else:
+        return A.Compose(
+            [
+                A.Resize(IMAGE_SIZE, IMAGE_SIZE),
+                A.Normalize(mean=(0.485, 0.456, 0.406),
+                            std=(0.229, 0.224, 0.225)),
+                ToTensorV2(),
+            ],
+            bbox_params=A.BboxParams(format="albumentations",
+                                     label_fields=["bbox_labels"],
+                                     clip=True,
+                                     min_visibility=0.3),
+        )
 
 
 class OxfordIIITPetDataset(Dataset):
-    """Oxford-IIIT Pet multi-task dataset loader skeleton."""
-    def __init__(self, root_dir=None , test_size = 0.2 , random_state=42 , isTrain = True):
+    def __init__(self, root_dir=None, test_size=0.2, random_state=42, isTrain=True):
 
         if root_dir is None:
-            root_dir = os.path.join(os.path.dirname(__file__), 'dataset')
-        
-        root_dir = os.path.abspath(root_dir)  # Convert to absolute path
+            root_dir = os.path.join(os.path.dirname(__file__), "dataset")
 
+        root_dir = os.path.abspath(root_dir)
+
+        self.images_dir = os.path.join(root_dir, "images")
+        self.masks_dir = os.path.join(root_dir, "annotations", "trimaps")
+        self.xmls_dir = os.path.join(root_dir, "annotations", "xmls")
         annotations_file = os.path.join(root_dir, "annotations", "list.txt")
 
-        images_dir = os.path.join(root_dir ,'images')
-        
-        # valid_ext = ('.jpg', '.jpeg', '.png')
+        images_paths = []
+        labels = []
+        bboxes = []
 
-        # images_file_name = [
-        #     f for f in os.listdir(images_dir)
-        #     if f.lower().endswith(valid_ext)
-        # ]
-
-        # self.labels = [''.join(char for char in cur_image if not char.isdigit()) for cur_image in images_file_name]
-
-        # self.labels = [s[:-5] for s in self.labels]
-
-        # self.images_paths = [os.path.join(images_dir,cur_image_path) for cur_image_path in images_file_name]
-
-        self.images_paths = []
-        self.labels = []
-
+        # ---------- BUILD DATA ----------
         with open(annotations_file, "r") as f:
             for line in f:
                 if line.startswith("#"):
                     continue
-                
+
                 parts = line.strip().split()
-                image_name = parts[0] + ".jpg"
-                class_id = int(parts[1]) - 1   
+                name = parts[0]
+                class_id = int(parts[1]) - 1
 
-                self.images_paths.append(os.path.join(images_dir, image_name))
-                self.labels.append(class_id)
+                img_path = os.path.join(self.images_dir, name + ".jpg")
+                xml_path = os.path.join(self.xmls_dir, name + ".xml")
 
+                bbox = self._parse_bbox(xml_path)
 
-        train_images_path, test_images_path, y_train, y_test = train_test_split(self.images_paths,self.labels , random_state=random_state,test_size=test_size, shuffle=True , stratify=self.labels)
-        
-        unique_classes = sorted(list(set(self.labels)))
-        self.class_to_idx = {cls: idx for idx, cls in enumerate(unique_classes)}
-        
+                images_paths.append(img_path)
+                labels.append(class_id)
+                bboxes.append(bbox)
+
+        # ---------- SPLIT ----------
+        train_img, test_img, y_train, y_test, b_train, b_test = train_test_split(
+            images_paths, labels, bboxes,
+            test_size=test_size,
+            random_state=random_state,
+            stratify=labels
+        )
+
         if isTrain:
-            self.images_paths = train_images_path
+            self.images_paths = train_img
             self.labels = y_train
+            self.bboxes = b_train
+            self.split = "train"
         else:
-            self.images_paths = test_images_path
+            self.images_paths = test_img
             self.labels = y_test
+            self.bboxes = b_test
+            self.split = "val"
 
+        self.transform = get_transforms(self.split)
+
+    # ---------- PARSE XML ----------
+    def _parse_bbox(self, xml_path):
+        if not os.path.exists(xml_path):
+            return [0.0, 0.0, 1.0, 1.0]
+
+        try:
+            tree = ET.parse(xml_path)
+            root = tree.getroot()
+
+            size = root.find("size")
+            w = float(size.find("width").text)
+            h = float(size.find("height").text)
+
+            bb = root.find("object").find("bndbox")
+
+            xmin = float(bb.find("xmin").text) / w
+            ymin = float(bb.find("ymin").text) / h
+            xmax = float(bb.find("xmax").text) / w
+            ymax = float(bb.find("ymax").text) / h
+
+            return [xmin, ymin, xmax, ymax]
+
+        except:
+            return [0.0, 0.0, 1.0, 1.0]
 
     def __len__(self):
-        return len(self.images_paths) 
+        return len(self.images_paths)
 
     def __getitem__(self, idx):
-        import torch
-
-        image = Image.open(self.images_paths[idx]).convert("RGB")        
-        image = image.resize((224, 224))
-        
-        image = np.array(image)
-        
-        # Convert to tensor (HWC → CHW)
-        image = torch.tensor(image, dtype=torch.float32).permute(2, 0, 1) / 255.0
-        
+        img_path = self.images_paths[idx]
         label = self.labels[idx]
+        bbox = self.bboxes[idx]
 
-        return image, torch.tensor(label, dtype=torch.long)
-    
-def get_data_loader(root_dir=None , test_size = 0.2 , random_state=42 , batch_size = 64):
+        # ---------- LOAD ----------
+        image = np.array(Image.open(img_path).convert("RGB"))
 
-    dataset_train = OxfordIIITPetDataset(root_dir=root_dir , test_size=test_size , random_state=random_state ,isTrain = True )
+        name = os.path.basename(img_path).replace(".jpg", "")
+        mask_path = os.path.join(self.masks_dir, name + ".png")
+        mask = np.array(Image.open(mask_path).convert("L"))
 
-    dataset_test = OxfordIIITPetDataset(root_dir=root_dir , test_size=test_size , random_state=random_state , isTrain=False)
+        # ---------- TRANSFORM ----------
+        transformed = self.transform(
+            image=image,
+            mask=mask,
+            bboxes=[bbox],
+            bbox_labels=[0]
+        )
+
+        image_t = transformed["image"].float()
+
+        mask_t = transformed["mask"]
+        if not isinstance(mask_t, torch.Tensor):
+            mask_t = torch.tensor(mask_t)
+        mask_t = torch.clamp(mask_t.long() - 1, 0, 2)
+
+        # ---------- BBOX ----------
+        if len(transformed["bboxes"]) > 0:
+            x1, y1, x2, y2 = transformed["bboxes"][0]
+        else:
+            x1, y1, x2, y2 = 0.0, 0.0, 1.0, 1.0
+
+        cx = ((x1 + x2) / 2) * IMAGE_SIZE
+        cy = ((y1 + y2) / 2) * IMAGE_SIZE
+        bw = (x2 - x1) * IMAGE_SIZE
+        bh = (y2 - y1) * IMAGE_SIZE
+
+        bbox_t = torch.tensor([cx, cy, bw, bh], dtype=torch.float32)
+
+        return {
+            "image": image_t,
+            "label": torch.tensor(label, dtype=torch.long),
+            "bbox": bbox_t,
+            "mask": mask_t
+        }
 
 
-    train_dataloader = DataLoader(
-    dataset=dataset_train,
-    batch_size=batch_size,
-    shuffle=True,
-    num_workers=0 # For parallel data loading (optional)
-    )
+def get_data_loader(root_dir=None, batch_size=64):
 
-    test_dataloader = DataLoader(
-    dataset=dataset_test,
-    batch_size=batch_size,
-    shuffle=True,
-    num_workers=0 # For parallel data loading (optional)
-    )
+    train_dataset = OxfordIIITPetDataset(root_dir=root_dir, isTrain=True)
+    test_dataset = OxfordIIITPetDataset(root_dir=root_dir, isTrain=False)
 
-    return train_dataloader , test_dataloader
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
-
-
-
-# if __name__ == "__main__":
-#     # dataset = OxfordIIITPetDataset()
-
-#     train_loader , _ = get_data_loader()
-
-#     for i, (x,y) in enumerate(train_loader):
-#         print(i)
-#         print(y[0])
-#         print(x[0])
-#         print(type(x[0]))
-#         break
-
+    return train_loader, test_loader

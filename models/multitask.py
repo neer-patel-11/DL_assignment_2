@@ -5,13 +5,18 @@ from models.vgg11 import VGG11Encoder
 from models.classification import VGG11Classifier
 import os
 
+
 def _load_state(path, device="cpu"):
     ckpt = torch.load(path, map_location=device)
     return ckpt.get("state_dict", ckpt)
 
 
 class MultiTaskPerceptionModel(nn.Module):
-    """Shared-backbone multi-task model — classification fully loaded, others return empty tensors."""
+    """
+    Evaluation-ready model:
+    - Real: classification
+    - Dummy: localization + segmentation (zeros)
+    """
 
     def __init__(
         self,
@@ -21,74 +26,78 @@ class MultiTaskPerceptionModel(nn.Module):
         classifier_path: str = "checkpoints/classifier.pth",
         localizer_path: str = "checkpoints/localizer.pth",
         unet_path: str = "checkpoints/unet.pth",
-        dropout_p: float = 0.0,
+        dropout_p: float = 0.4,
     ):
         super().__init__()
 
-        # Download checkpoints  
+        # -------- DOWNLOAD CHECKPOINTS (REQUIRED) --------
         import gdown
-        os.makedirs(os.path.dirname(classifier_path) if os.path.dirname(classifier_path) else "checkpoints", exist_ok=True)
+
+        os.makedirs(
+            os.path.dirname(classifier_path) if os.path.dirname(classifier_path) else "checkpoints",
+            exist_ok=True
+        )
+
         gdown.download(id="1zvfoMy1ds9v1Df9ZeSanBHK8XVu045WD", output=classifier_path, quiet=False)
         gdown.download(id="1BpOe9YyojShsXoSTBvdBflrubHEF2wQK", output=localizer_path, quiet=False)
         gdown.download(id="1H59EmgH6IACggQ_jaSY0OAGPwz2Ai7WU", output=unet_path, quiet=False)
 
-        # Shared backbone 
+        # -------- BACKBONE --------
         self.encoder = VGG11Encoder(in_channels=in_channels)
 
-        # Classification head 
+        # -------- MATCH CLASSIFIER --------
+        self.avgpool = nn.AdaptiveAvgPool2d((7, 7))
+
         self.classification_head = nn.Sequential(
-            nn.Flatten(),                        
-            nn.Linear(512 * 7 * 7, 4096),        
-            nn.ReLU(inplace=True),               
-            CustomDropout(dropout_p),            
-            nn.Linear(4096, 4096),               
-            nn.ReLU(inplace=True),               
-            CustomDropout(dropout_p),            
-            nn.Linear(4096, num_breeds),         
+            nn.Linear(512 * 7 * 7, 4096),
+            nn.ReLU(inplace=True),
+            CustomDropout(dropout_p),
+
+            nn.Linear(4096, 4096),
+            nn.ReLU(inplace=True),
+            CustomDropout(dropout_p),
+
+            nn.Linear(4096, num_breeds),
         )
 
-        # Stub heads 
-        self.loc_head = nn.Identity()
-        self.seg_final = nn.Identity()
-
-        # Load weights 
+        # -------- LOAD PRETRAINED --------
         self._load_classifier(classifier_path)
 
+        self.seg_classes = seg_classes
 
     def _load_classifier(self, path: str):
         """
-        Clean loading:
-        1. Load full classifier
-        2. Copy encoder + classifier weights
+        Load pretrained classifier weights cleanly
         """
-
-        # Load pretrained classifier
         clf = VGG11Classifier()
         clf.load_state_dict(_load_state(path))
 
-        # Copy encoder weights
+        # copy encoder
         self.encoder.load_state_dict(clf.features.state_dict())
 
-        # Copy classification head weights
+        # copy classifier
         self.classification_head.load_state_dict(clf.classifier.state_dict())
 
-        print("[classifier] Loaded encoder + classification head successfully")
-
+        print(" Loaded pretrained classifier weights")
 
     def forward(self, x: torch.Tensor):
-        B = x.size(0)
+        B, _, H, W = x.shape
 
-        # Encoder → [B, 512, 7, 7]
-        bottleneck = self.encoder(x, return_features=True)
+        # -------- ENCODER --------
+        x = self.encoder(x, return_features=False)
 
-        # Classification
-        cls_out = self.classification_head(bottleneck)
+        # -------- CLASSIFICATION --------
+        pooled = self.avgpool(x)
+        flat = torch.flatten(pooled, 1)
+        cls_out = self.classification_head(flat)
 
-        # Stub outputs
+        # -------- DUMMY OUTPUTS --------
         loc_out = torch.zeros(B, 4, device=x.device, dtype=x.dtype)
+
         seg_out = torch.zeros(
-            B, 3, x.size(2), x.size(3),
-            device=x.device, dtype=x.dtype
+            B, self.seg_classes, H, W,
+            device=x.device,
+            dtype=x.dtype
         )
 
         return {
