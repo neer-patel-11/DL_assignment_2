@@ -25,7 +25,7 @@ class MultiTaskPerceptionModel(nn.Module):
     ):
         super().__init__()
 
-        # Download checkpoints 
+        # Download checkpoints  
         import gdown
         gdown.download(id="1zvfoMy1ds9v1Df9ZeSanBHK8XVu045WD", output=classifier_path, quiet=False)
         gdown.download(id="1BpOe9YyojShsXoSTBvdBflrubHEF2wQK", output=localizer_path, quiet=False)
