@@ -4,7 +4,7 @@ import os
 
 from models.classification import VGG11Classifier
 from models.localization import VGG11Localizer
-
+from models.segmentation import VGG11UNet
 
 def _load_state(path, device="cpu"):
     ckpt = torch.load(path, map_location=device)
@@ -41,14 +41,12 @@ class MultiTaskPerceptionModel(nn.Module):
 
         self.classifier = VGG11Classifier(num_classes=num_breeds)
         self.localizer = VGG11Localizer()
-
+        self.segmentor = VGG11UNet(num_classes=seg_classes)
         self.seg_classes = seg_classes
 
-        # -------- LOAD WEIGHTS --------
         self._load_classifier(classifier_path)
         self._load_localizer(localizer_path)
-
-    # ---------------- LOADERS ----------------
+        self._load_segmentor(unet_path)
 
     def _load_classifier(self, path):
         if os.path.exists(path):
@@ -63,8 +61,13 @@ class MultiTaskPerceptionModel(nn.Module):
             print(" Localizer loaded")
         else:
             print(" Localizer checkpoint missing")
+    def _load_segmentor(self, path):
+        if os.path.exists(path):
+            self.segmentor.load_state_dict(_load_state(path))
+            print(" Segmentor loaded")
+        else:
+            print(" Segmentor checkpoint missing")
 
-    # ---------------- FORWARD ----------------
 
     def forward(self, x: torch.Tensor):
         B, _, H, W = x.shape
@@ -75,12 +78,8 @@ class MultiTaskPerceptionModel(nn.Module):
         # Localization
         loc_out = self.localizer(x)
 
-        # Dummy segmentation
-        seg_out = torch.zeros(
-            B, self.seg_classes, H, W,
-            device=x.device,
-            dtype=x.dtype
-        )
+        # segmentation
+        seg_out = self.segmentor(x)
 
         return {
             "classification": cls_out,
