@@ -494,7 +494,7 @@ def train_vgg11_unet(
 
 
 # if __name__ == "__main__":
-#     # Example usage
+#     # Example usage   
 #     train_vgg11_unet(
 #         root_dir="path/to/oxford-iiit-pet",  # Update this path
 #         batch_size=16,

@@ -49,7 +49,7 @@ def get_transforms(split):
 
 
 class OxfordIIITPetDataset(Dataset):
-    def __init__(self, root_dir=None, test_size=0.2, random_state=42, isTrain=True):
+    def __init__(self, root_dir=None, test_size=0.2, random_state=42, isTrain=True,need_box=False):
 
         if root_dir is None:
             root_dir = os.path.join(os.path.dirname(__file__), "dataset")
@@ -75,8 +75,12 @@ class OxfordIIITPetDataset(Dataset):
                 name = parts[0]
                 class_id = int(parts[1]) - 1
 
+
                 img_path = os.path.join(self.images_dir, name + ".jpg")
                 xml_path = os.path.join(self.xmls_dir, name + ".xml")
+                
+                if need_box and not os.path.exists(xml_path):
+                    continue
 
                 bbox = self._parse_bbox(xml_path)
 
