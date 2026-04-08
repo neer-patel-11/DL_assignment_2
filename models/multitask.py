@@ -35,9 +35,8 @@ class MultiTaskPerceptionModel(nn.Module):
             os.path.dirname(classifier_path) if os.path.dirname(classifier_path) else "checkpoints",
             exist_ok=True
         )
-
         gdown.download(id="19Grc7A4q9J6Dq9dJM9w9VOscjQu_V-o9", output=classifier_path, quiet=False)
-        gdown.download(id="1dLju5vUvjlij2Q_Xq1dwtIWKx7tjm0In", output=localizer_path, quiet=False)
+        gdown.download(id="1NLNyJhUkDmE_prWq0ixzxa4UmaDj8neY", output=localizer_path, quiet=False)
         gdown.download(id="1H59EmgH6IACggQ_jaSY0OAGPwz2Ai7WU", output=unet_path, quiet=False)
 
         self.classifier = VGG11Classifier(num_classes=num_breeds)
