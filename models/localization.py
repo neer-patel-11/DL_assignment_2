@@ -4,6 +4,10 @@
 import torch
 import torch.nn as nn
 from models.layers import CustomDropout
+from models.vgg11 import VGG11Encoder
+
+IMAGE_SIZE = 224
+
 
 class VGG11Localizer(nn.Module):
     """VGG11-based localizer."""
@@ -19,39 +23,7 @@ class VGG11Localizer(nn.Module):
         super().__init__()
 
         # VGG11 Encoder (from scratch)
-        self.features = nn.Sequential(
-            # Block 1
-            nn.Conv2d(in_channels, 64, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2),
-
-            # Block 2
-            nn.Conv2d(64, 128, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2),
-
-            # Block 3
-            nn.Conv2d(128, 256, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(256, 256, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2),
-
-            # Block 4
-            nn.Conv2d(256, 512, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(512, 512, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2),
-
-            # Block 5
-            nn.Conv2d(512, 512, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(512, 512, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2),
-        )
-
+        self.features = VGG11Encoder(in_channels=in_channels)
         # 🔹 Adaptive pooling (handles any input size)
         self.avgpool = nn.AdaptiveAvgPool2d((7, 7))
 
@@ -66,7 +38,8 @@ class VGG11Localizer(nn.Module):
             nn.ReLU(True),
             CustomDropout(dropout_p),
 
-            nn.Linear(1024, 4)  # [x, y, w, h]
+            nn.Linear(1024, 4),  # [x, y, w, h]
+            nn.Sigmoid()
         )
 
         
@@ -82,4 +55,4 @@ class VGG11Localizer(nn.Module):
         x = self.avgpool(x)
         x = self.regressor(x)
 
-        return x
+        return x * IMAGE_SIZE

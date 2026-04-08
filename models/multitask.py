@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
-from models.layers import CustomDropout
-from models.vgg11 import VGG11Encoder
-from models.classification import VGG11Classifier
 import os
+
+from models.classification import VGG11Classifier
+from models.localization import VGG11Localizer
 
 
 def _load_state(path, device="cpu"):
@@ -14,85 +14,69 @@ def _load_state(path, device="cpu"):
 class MultiTaskPerceptionModel(nn.Module):
     """
     Evaluation-ready model:
-    - Real: classification
-    - Dummy: localization + segmentation (zeros)
+    - Classification → real pretrained model
+    - Localization → real pretrained model
+    - Segmentation → dummy (zeros)
     """
 
     def __init__(
         self,
         num_breeds: int = 37,
         seg_classes: int = 3,
-        in_channels: int = 3,
         classifier_path: str = "checkpoints/classifier.pth",
         localizer_path: str = "checkpoints/localizer.pth",
         unet_path: str = "checkpoints/unet.pth",
-        dropout_p: float = 0.4,
     ):
         super().__init__()
 
-        # -------- DOWNLOAD CHECKPOINTS (REQUIRED) --------         import gdown
         import gdown
+
         os.makedirs(
             os.path.dirname(classifier_path) if os.path.dirname(classifier_path) else "checkpoints",
             exist_ok=True
         )
 
         gdown.download(id="19Grc7A4q9J6Dq9dJM9w9VOscjQu_V-o9", output=classifier_path, quiet=False)
-        gdown.download(id="1BpOe9YyojShsXoSTBvdBflrubHEF2wQK", output=localizer_path, quiet=False)
+        gdown.download(id="1dLju5vUvjlij2Q_Xq1dwtIWKx7tjm0In", output=localizer_path, quiet=False)
         gdown.download(id="1H59EmgH6IACggQ_jaSY0OAGPwz2Ai7WU", output=unet_path, quiet=False)
 
-        # -------- BACKBONE --------
-        self.encoder = VGG11Encoder(in_channels=in_channels)
+        self.classifier = VGG11Classifier(num_classes=num_breeds)
+        self.localizer = VGG11Localizer()
 
-        # -------- MATCH CLASSIFIER --------
-        self.avgpool = nn.AdaptiveAvgPool2d((7, 7))
+        # self.seg_classes = seg_classes
 
-        self.classification_head = nn.Sequential(
-            nn.Linear(512 * 7 * 7, 4096),
-            nn.ReLU(inplace=True),
-            CustomDropout(dropout_p),
-
-            nn.Linear(4096, 4096),
-            nn.ReLU(inplace=True),
-            CustomDropout(dropout_p),
-
-            nn.Linear(4096, num_breeds),
-        )
-
-        # -------- LOAD PRETRAINED --------
+        # -------- LOAD WEIGHTS --------
         self._load_classifier(classifier_path)
+        self._load_localizer(localizer_path)
 
-        self.seg_classes = seg_classes
+    # ---------------- LOADERS ----------------
 
-    def _load_classifier(self, path: str):
-        """
-        Load pretrained classifier weights cleanly
-        """
-        clf = VGG11Classifier()
-        clf.load_state_dict(_load_state(path))
+    def _load_classifier(self, path):
+        if os.path.exists(path):
+            self.classifier.load_state_dict(_load_state(path))
+            print(" Classifier loaded")
+        else:
+            print(" Classifier checkpoint missing")
 
-        # copy encoder
-        self.encoder.load_state_dict(clf.features.state_dict())
+    def _load_localizer(self, path):
+        if os.path.exists(path):
+            self.localizer.load_state_dict(_load_state(path))
+            print(" Localizer loaded")
+        else:
+            print(" Localizer checkpoint missing")
 
-        # copy classifier
-        self.classification_head.load_state_dict(clf.classifier.state_dict())
-
-        print(" Loaded pretrained classifier weights")
+    # ---------------- FORWARD ----------------
 
     def forward(self, x: torch.Tensor):
         B, _, H, W = x.shape
 
-        # -------- ENCODER --------
-        x = self.encoder(x, return_features=False)
+        # Classification
+        cls_out = self.classifier(x)
 
-        # -------- CLASSIFICATION --------
-        pooled = self.avgpool(x)
-        flat = torch.flatten(pooled, 1)
-        cls_out = self.classification_head(flat)
+        # Localization
+        loc_out = self.localizer(x)
 
-        # -------- DUMMY OUTPUTS --------
-        loc_out = torch.zeros(B, 4, device=x.device, dtype=x.dtype)
-
+        # Dummy segmentation
         seg_out = torch.zeros(
             B, self.seg_classes, H, W,
             device=x.device,
