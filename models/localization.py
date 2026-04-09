@@ -6,9 +6,6 @@ import torch.nn as nn
 from models.layers import CustomDropout
 from models.vgg11 import VGG11Encoder
 
-IMAGE_SIZE = 224
-
-
 class VGG11Localizer(nn.Module):
     """VGG11-based localizer."""
 
@@ -42,7 +39,7 @@ class VGG11Localizer(nn.Module):
             nn.Sigmoid()
         )
 
-        
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass for localization model.
         Args:
@@ -55,4 +52,4 @@ class VGG11Localizer(nn.Module):
         x = self.avgpool(x)
         x = self.regressor(x)
 
-        return x * IMAGE_SIZE
+        return x * 224
