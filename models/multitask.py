@@ -57,7 +57,7 @@ class MultiTaskPerceptionModel(nn.Module):
 
     def _load_localizer(self, path):
         if os.path.exists(path):
-            self.localizer.load_state_dict(_load_state(path))
+            self.localizer.load_state_dict(_load_state(path),strict=False)
             print(" Localizer loaded")
         else:
             print(" Localizer checkpoint missing")
