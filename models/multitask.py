@@ -28,14 +28,13 @@ class MultiTaskPerceptionModel(nn.Module):
         unet_path: str = "checkpoints/unet.pth",
     ):
         super().__init__()
-
         import gdown
         os.makedirs(
             os.path.dirname(classifier_path) if os.path.dirname(classifier_path) else "checkpoints",
             exist_ok=True
         )
         gdown.download(id="19Grc7A4q9J6Dq9dJM9w9VOscjQu_V-o9", output=classifier_path, quiet=False)
-        gdown.download(id="1zL88NWQRTZeiWXSEpbKZ0wczaDPR0nl", output=localizer_path, quiet=False)
+        gdown.download(id="1zL88NWQRTZeiWXSEpbKZ0wczaDPR0nl-", output=localizer_path, quiet=False)
         gdown.download(id="1sw0a8if_hrFzuzRI6v29_LNz22UMDUAg", output=unet_path, quiet=False)
 
         self.classifier = VGG11Classifier(num_classes=num_breeds)
