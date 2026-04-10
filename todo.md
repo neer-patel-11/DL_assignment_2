@@ -283,3 +283,31 @@
 * [ ] Final Submission ✅
 
 ---
+
+
+
+
+pip install wandb weave
+
+wandb login
+
+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
+
+import os
+os.environ['WANDB_API_KEY'] = 'your_api_key'
+
+
+# Start a new wandb run to track this script.
+run = wandb.init(
+    # Set the wandb entity where your project will be logged (generally your team name).
+    entity="da25m021-iitm-indi",
+    # Set the wandb project where this run will be logged.
+    project="dl_assignment_2",
+    # Track hyperparameters and run metadata.
+    config={
+        "learning_rate": 0.02,
+        "architecture": "CNN",
+        "dataset": "CIFAR-100",
+        "epochs": 10,
+    },
+)

@@ -6,3 +6,4 @@ checkpoints/classifier.pth
 checkpoints/localizer.pth
 checkpoints/unet.pth
 temp.py
+todo.md
