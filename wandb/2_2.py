@@ -1,13 +1,10 @@
-# =========================
-# TASK 2.2: DROPOUT STUDY
-# =========================
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import wandb
 
-from pets_dataset import get_data_loader
+from data.pets_dataset import get_data_loader
 from models.vgg11 import VGG11Encoder
 from models.layers import CustomDropout   # your custom dropout
 from models.classification import VGG11Classifier
@@ -16,9 +13,6 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 
-# =========================
-# 🔹 TRAIN / EVAL
-# =========================
 def train_one_epoch(model, loader, optimizer, criterion):
     model.train()
     total_loss = 0
@@ -57,16 +51,12 @@ def evaluate(model, loader, criterion):
     return total_loss / len(loader)
 
 
-# =========================
-# 🔹 EXPERIMENT RUN
-# =========================
 def run_experiment(dropout_p, epochs=10, lr=0.01):
 
     run = wandb.init(
         entity="da25m021-iitm-indi",
         project="dl_assignment_2",
 
-        # 🔥 GROUPING FOR TASK 2.2
         group="TASK_2_2",
 
         # Helps separation inside group
@@ -106,18 +96,14 @@ def run_experiment(dropout_p, epochs=10, lr=0.01):
     run.finish()
 
 
-# =========================
-# 🔹 MAIN: RUN ALL 3 CASES
-# # =========================
 # if __name__ == "__main__":
 
-#     # 1️⃣ No Dropout
+#     # 1 No Dropout
 #     run_experiment(dropout_p=0.0)
 
-#     # 2️⃣ Moderate Dropout
+#     # 2 Moderate Dropout
 #     run_experiment(dropout_p=0.2)
 
-#     # 3️⃣ High Dropout
+#     # 3 High Dropout
 #     run_experiment(dropout_p=0.5)
 
-# Custom dropout increases stochasticity in neuron activations, preventing co-adaptation. As dropout probability increases, training loss rises due to reduced capacity, but validation loss initially improves due to better generalization. However, excessive dropout (p=0.5) leads to underfitting. Thus, dropout effectively reduces the generalization gap by regularizing the model.
