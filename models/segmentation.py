@@ -23,13 +23,7 @@ class VGG11UNet(nn.Module):
         # Encoder
         self.encoder = VGG11Encoder(in_channels=in_channels)
         
-        # Decoder with transposed convolutions
-        # Note: VGG11 has blocks with channels: 64, 128, 256, 256, 512, 512
-        # But in the provided classifier, it's: 64, 128, 256, 512, 512
-        
-        # Upsample from bottleneck (512, 7x7) -> (512, 14x14)
         self.up5 = nn.ConvTranspose2d(512, 512, kernel_size=2, stride=2)
-        # Concat with block5 skip (512) = 1024 channels
         self.dec5 = nn.Sequential(
             nn.Conv2d(1024, 512, kernel_size=3, padding=1),
             nn.BatchNorm2d(512),

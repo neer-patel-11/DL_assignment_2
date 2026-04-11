@@ -1,5 +1,4 @@
-"""Reusable custom layers 
-"""
+
 
 import torch
 import torch.nn as nn
@@ -38,8 +37,6 @@ class CustomDropout(nn.Module):
         if not self.training or self.p ==0:
             return x
 
-        #  mask (same shape as input)
         mask = (torch.rand_like(x) > self.p).float()
 
-        # Inverted dropout scaling
         return (x * mask) / (1.0 - self.p)

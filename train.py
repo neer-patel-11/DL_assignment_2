@@ -1,20 +1,15 @@
 
 from data.pets_dataset import get_data_loader
 from models.classification import VGG11Classifier
-
-
 import torch
 import torch.optim as optim
 import torch.nn as nn
 from sklearn.metrics import f1_score, accuracy_score
 import os
-
-import torch
-import torch.optim as optim
-import torch.nn as nn
-from sklearn.metrics import f1_score, accuracy_score
-import os
-
+from models.localization import VGG11Localizer
+from losses.iou_loss import IoULoss
+from models.segmentation import VGG11UNet
+from data.pets_dataset import get_data_loader
 
 def train_vgg11(batch_size=64, lr=1e-4, epochs=40,
                 device="cuda" if torch.cuda.is_available() else "cpu"):
@@ -33,9 +28,8 @@ def train_vgg11(batch_size=64, lr=1e-4, epochs=40,
 
     os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
 
-    # ================= RESUME LOGIC =================
     if os.path.exists(checkpoint_path):
-        print("🔄 Loading existing checkpoint...")
+        print("Loading existing checkpoint...")
 
         checkpoint = torch.load(checkpoint_path, map_location=device)
 
@@ -43,19 +37,17 @@ def train_vgg11(batch_size=64, lr=1e-4, epochs=40,
 
         if "optimizer" in checkpoint:
             optimizer.load_state_dict(checkpoint["optimizer"])
-            print("✅ Optimizer state loaded")
+            print("Optimizer state loaded")
         else:
-            print("⚠️ No optimizer state found → starting fresh optimizer")
+            print(" No optimizer state found → starting fresh optimizer")
 
         start_epoch = checkpoint.get("epoch", 0)
         best_val_f1 = checkpoint.get("best_val_f1", 0.0)
 
-        print(f"✅ Resumed from epoch {start_epoch} | Best F1: {best_val_f1:.4f}")
+        print(f" Resumed from epoch {start_epoch} | Best F1: {best_val_f1:.4f}")
 
-    # ================= TRAIN LOOP =================
     for epoch in range(start_epoch, epochs):
 
-        # -------- TRAIN --------
         model.train()
         train_loss = 0.0
 
@@ -85,7 +77,6 @@ def train_vgg11(batch_size=64, lr=1e-4, epochs=40,
         train_f1 = f1_score(all_train_labels, all_train_preds, average="macro")
         train_acc = accuracy_score(all_train_labels, all_train_preds)
 
-        # -------- VALIDATION --------
         model.eval()
         val_loss = 0.0
 
@@ -111,20 +102,18 @@ def train_vgg11(batch_size=64, lr=1e-4, epochs=40,
         val_f1 = f1_score(all_val_labels, all_val_preds, average="macro")
         val_acc = accuracy_score(all_val_labels, all_val_preds)
 
-        # -------- LOG --------
         print(
             f"Epoch [{epoch+1}/{epochs}] | "
             f"Train Loss: {train_loss:.4f} | Train F1: {train_f1:.4f} | Train Acc: {train_acc:.4f} || "
             f"Val Loss: {val_loss:.4f} | Val F1: {val_f1:.4f} | Val Acc: {val_acc:.4f}"
         )
 
-        # -------- SAVE BEST --------
         if val_f1 > best_val_f1:
             best_val_f1 = val_f1
 
             checkpoint = {
                 "state_dict": model.state_dict(),
-                "optimizer": optimizer.state_dict(),   # 🔥 IMPORTANT
+                "optimizer": optimizer.state_dict(),   
                 "epoch": epoch + 1,
                 "best_val_f1": best_val_f1,
                 "val_f1": val_f1,
@@ -132,10 +121,9 @@ def train_vgg11(batch_size=64, lr=1e-4, epochs=40,
             }
 
             torch.save(checkpoint, checkpoint_path)
-            print("✅ Saved best model")
+            print(" Saved best model")
 
 
-from losses.iou_loss import IoULoss
 def compute_iou(pred_boxes, target_boxes, eps=1e-6):
     def to_corners(box):
         x, y, w, h = box[:, 0], box[:, 1], box[:, 2], box[:, 3]
@@ -165,8 +153,6 @@ def compute_iou(pred_boxes, target_boxes, eps=1e-6):
 
     return iou
 
-from models.localization import VGG11Localizer
-from losses.iou_loss import IoULoss
 def is_valid_bbox(bbox):
     """
     bbox: [cx, cy, w, h] (pixel space)
@@ -198,9 +184,8 @@ def train_localizer(batch_size=64, lr=1e-4, epochs=40,
 
     os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
 
-    # ================= RESUME =================
     if os.path.exists(checkpoint_path):
-        print("🔄 Loading checkpoint...")
+        print(" Loading checkpoint...")
 
         checkpoint = torch.load(checkpoint_path, map_location=device)
 
@@ -208,16 +193,15 @@ def train_localizer(batch_size=64, lr=1e-4, epochs=40,
 
         if "optimizer" in checkpoint:
             optimizer.load_state_dict(checkpoint["optimizer"])
-            print("✅ Optimizer loaded")
+            print(" Optimizer loaded")
         else:
-            print("⚠️ No optimizer found")
+            print(" No optimizer found")
 
         start_epoch = checkpoint.get("epoch", 0)
         best_val_loss = checkpoint.get("best_val_loss", float("inf"))
 
-        print(f"✅ Resumed from epoch {start_epoch}")
+        print(f" Resumed from epoch {start_epoch}")
 
-    # ================= TRAIN =================
     for epoch in range(start_epoch, epochs):
 
         model.train()
@@ -232,7 +216,6 @@ def train_localizer(batch_size=64, lr=1e-4, epochs=40,
             x = batch["image"].to(device)
             bbox = batch["bbox"].to(device)
 
-            # -------- FILTER --------
             valid_idx = []
             for i in range(len(bbox)):
                 if is_valid_bbox(bbox[i]):
@@ -248,7 +231,6 @@ def train_localizer(batch_size=64, lr=1e-4, epochs=40,
             valid_samples += len(valid_idx)
             total_samples += len(valid_idx)
 
-            # -------- TRAIN STEP --------
             optimizer.zero_grad()
 
             outputs = model(x)
@@ -262,11 +244,10 @@ def train_localizer(batch_size=64, lr=1e-4, epochs=40,
 
         train_loss /= len(train_loader)
 
-        print(f"\n📊 Train Stats:")
+        print(f"\n Train Stats:")
         print(f"Total used: {valid_samples}")
         print(f"Skipped: {skipped_samples}")
 
-        # ================= VALIDATION =================
         model.eval()
         val_loss = 0.0
 
@@ -301,7 +282,7 @@ def train_localizer(batch_size=64, lr=1e-4, epochs=40,
 
         val_loss /= len(test_loader)
 
-        print(f"📊 Val Stats:")
+        print(f" Val Stats:")
         print(f"Used: {val_valid} | Skipped: {val_skipped}")
 
         print(
@@ -310,7 +291,6 @@ def train_localizer(batch_size=64, lr=1e-4, epochs=40,
             f"Val Loss: {val_loss:.4f}"
         )
 
-        # ================= SAVE BEST =================
         if val_loss < best_val_loss:
             best_val_loss = val_loss
 
@@ -322,10 +302,8 @@ def train_localizer(batch_size=64, lr=1e-4, epochs=40,
             }
 
             torch.save(checkpoint, checkpoint_path)
-            print("✅ Saved best localizer")
+            print(" Saved best localizer")
 
-from models.segmentation import VGG11UNet
-from data.segmentation_dataset import get_segmentation_data_loader
 
 
 def dice_coefficient(pred, target, num_classes=3, eps=1e-7):
@@ -371,7 +349,7 @@ def train_vgg11_unet(
     
     # Load data
     print("Loading data...")
-    train_loader, test_loader = get_segmentation_data_loader(
+    train_loader, test_loader = get_data_loader(
         root_dir=root_dir,
         batch_size=batch_size,
         image_size=image_size,
@@ -492,13 +470,3 @@ def train_vgg11_unet(
     print(f"Best Validation Dice: {best_dice:.4f}")
     print(f"Best Validation Loss: {best_val_loss:.4f}")
 
-
-# if __name__ == "__main__":
-#     # Example usage   
-#     train_vgg11_unet(
-#         root_dir="path/to/oxford-iiit-pet",  # Update this path
-#         batch_size=16,
-#         lr=0.001,
-#         epochs=50,
-#         image_size=224
-#     )

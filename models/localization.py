@@ -21,10 +21,8 @@ class VGG11Localizer(nn.Module):
 
         # VGG11 Encoder (from scratch)
         self.features = VGG11Encoder(in_channels=in_channels)
-        # 🔹 Adaptive pooling (handles any input size)
         self.avgpool = nn.AdaptiveAvgPool2d((7, 7))
 
-        # 🔹 Regression head
         self.regressor = nn.Sequential(
             nn.Flatten(),
             nn.Linear(512 * 7 * 7, 4096),
