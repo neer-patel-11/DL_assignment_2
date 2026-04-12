@@ -291,8 +291,6 @@ pip install wandb weave
 
 wandb login
 
-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
-
 import os
 os.environ['WANDB_API_KEY'] = 'your_api_key'
 

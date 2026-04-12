@@ -1,46 +1,134 @@
-# DA6401 Assignment-2 Skeleton Guide
-
-This repository is an instructional skeleton for building the complete visual perception pipeline on Oxford-IIIT Pet.
+wandb report :- https://wandb.ai/da25m021-iitm-indi/dl_assignment_2/reports/DL-assignment-2--VmlldzoxNjQ5OTQxNw?accessToken=r6ty642ojnjho4lukc2przmi33a3kd7qk90eyl1dunl4h508hvf4gsgu7a5flae0
 
 
-### ADDITIONAL INSTRUCTIONS FOR ASSIGNMENT2:
-- Ensure VGG11 is implemented according to the official paper(https://arxiv.org/abs/1409.1556). The only difference being injecting BatchNorm and CustomDropout layers is your design choice.
-- Train all the networks on normalized images as input (as the test set given by autograder will be normalized images).
-- The output of Localization model = [x_center, y_center, width, height] all these numbers are with respect to image coordinates, in pixel space (not normalized)
-- Train the object localization network with the following loss function: MSE + custom_IOU_loss.
-- Make sure the custom_IOU loss is in range: [0,1]
-- In the custom IOU loss, you have to implement all the two reduction types: ["mean", "sum"] and the default reduction type should be "mean". You may include any other reduction type as well, which will help your network learn better.
-- multitask.py shd load the saved checkpoints (classifier.pth, localizer.pth, unet.pth), initialize the shared backbone and heads with these trained weights and do prediction.
-- Keep paths as relative paths for loading in multitask.py
-- Assume input image size is fixed according to vgg11 paper(can be hardcoded need not pass as args)
-- Stick to the arguments of the functions and classes given in the github repo, if you include any additional arguments make sure they always have some default value.
-- Do not import any other python packages apart from the ones mentioned in assignment pdf, if you do so the autograder will instantly crash and your submission will not be evaluated.
-- The following classes will be used by autograder: 
-    ```
-        from models.vgg11 import VGG11
-        from models.layers import CustomDropout
-        from losses.iou_loss import IoULoss
-        from multitask import MultiTaskPerceptionModel
-    ```
-- The submission link for this assignment will be available by Saturday(04/04/2026) on gradescope
+Name :- Neer Patel
+
+Roll :- DA25M021
 
 
+#  DA6401 Assignment 2 
 
+## 📌 Project Overview
 
+This project focuses on building a **complete visual perception pipeline** using deep learning. Instead of solving isolated tasks, the goal is to design a **unified system** that can understand images at multiple levels simultaneously.
 
-### GENERAL INSTRUCTIONS:
-- From this assignment onwards, if we find any wandb report which is private/inaccessible while grading, there wont be any second chance, that submission will be marked 0 for wandb marks.
-- The entireity of plots presented in the wandb report should be interactive and logged in the wandb project. Any screenshot or images of plots will straightly be marked 0 for that question.
-- Gradescope offers an option to activate whichever submission you want to, and that submission will be used for evaluation. Under any circumstances, no requests to be raised to TAs to activate any of your prior submissions. It is the student's responsibility to do so(if required) before submission deadline.
-- Assignment2 discussion forum has been opened on moodle for any doubt clarification/discussion.   
+The pipeline performs three core computer vision tasks in a **single forward pass**:
 
-
-
-
-## Contact
-
-For questions or issues, please contact the teaching staff or post on the course forum.
+* Image classification (pet breed recognition)
+* Object localization (bounding box prediction)
+* Semantic segmentation (pixel-wise labeling)
 
 ---
 
-Good luck with your implementation!
+## 🎯 Problem Statement
+
+Modern vision systems require the ability to:
+
+* Identify *what* is in an image
+* Locate *where* it is
+* Understand *which pixels belong to it*
+
+This assignment addresses the challenge of combining these capabilities into a **multi-task learning framework**. The key problem is to design a shared architecture that can efficiently learn and generalize across all three tasks without performance degradation due to task interference.
+
+---
+
+## 📊 Dataset
+
+The project uses the **Oxford-IIIT Pet Dataset**, which provides rich annotations for multiple vision tasks:
+
+* **37 pet breed classes** (for classification)
+* **Bounding box annotations** (for localization)
+* **Pixel-level trimaps** (for segmentation)
+
+This dataset enables the development of a **multi-task pipeline** since all three types of labels are available for each image.
+
+---
+
+## 🏗️ Architecture
+
+The system is built as a **unified deep learning model** with a shared backbone and multiple task-specific heads.
+
+### 1. Backbone — VGG11 (Custom Implementation)
+
+* Implemented from scratch using PyTorch
+* Consists of stacked convolutional layers with max-pooling
+* Enhanced with:
+
+  * Batch Normalization
+  * Custom Dropout layer (manually implemented)
+
+This backbone acts as a **feature extractor**, learning hierarchical representations from images.
+
+---
+
+### 2. Classification Head
+
+* Fully connected layers attached to the backbone
+* Outputs probabilities over **37 pet breeds**
+* Optimized using classification loss (e.g., Cross-Entropy)
+
+---
+
+### 3. Localization Head
+
+* Regression head predicting:
+
+  * `[x_center, y_center, width, height]`
+* Built on top of shared features
+* Uses a **custom IoU-based loss function**
+
+This head enables the model to **localize the object** within the image.
+
+---
+
+### 4. Segmentation Head (U-Net Style Decoder)
+
+* Symmetric decoder connected to the encoder (VGG11)
+* Uses:
+
+  * Transposed convolutions for upsampling
+  * Skip connections for feature fusion
+
+Produces a **pixel-wise segmentation mask** of the object.
+
+---
+
+### 5. Multi-Task Learning Framework
+
+All three heads are trained jointly using a **combined loss function**:
+
+* Classification loss
+* Localization (IoU) loss
+* Segmentation loss (e.g., Dice/BCE)
+
+The model shares representations across tasks, improving efficiency and enabling **end-to-end learning**.
+
+---
+
+## 📈 Evaluation Metrics
+
+The system is evaluated using task-specific metrics:
+
+* **Classification:** Macro F1 Score
+* **Localization:** Mean Average Precision (mAP)
+* **Segmentation:** Dice Score
+
+These metrics ensure a comprehensive evaluation of the pipeline’s performance.
+
+---
+
+## 🚀 Key Contributions
+
+* End-to-end **multi-task visual perception system**
+* Custom implementation of:
+
+  * VGG11 architecture
+  * Dropout layer
+  * IoU loss function
+* Integration of classification, detection, and segmentation into a **single unified model**
+
+---
+
+## 🏁 Conclusion
+
+This project demonstrates how multiple computer vision tasks can be combined into a **cohesive pipeline**, highlighting the strengths and challenges of multi-task learning in deep neural networks. It provides practical experience in designing scalable architectures that mimic real-world perception systems.
